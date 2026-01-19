@@ -17,49 +17,35 @@ const {
  * Формирует текст и inline-клавиатуру привычек
  */
 function renderHabitsMessage(habits) {
-  const { done, undone } = habits;
+  const all = [...habits.done, ...habits.undone];
+  const completed = habits.done.length;
 
-  if (!done.length && !undone.length) {
+  if (!all.length) {
     return {
-      text: 'У тебя пока нет привычек 👀',
-      keyboard: []
+      text: 'Пока нет привычек.\n\nНачни с первой — это займёт 5 секунд.',
+      keyboard: [[{ text: '➕ Новая привычка', callback_data: 'add_habit' }]]
     };
   }
 
-  let text = '';
+  let text = `Сегодня • ${completed} / ${all.length} 🔥\n\n`;
 
-  if (undone.length) {
-    text += '🟢 Сегодня не выполнены:\n';
-    undone.forEach((h, i) => {
-      text += `${i + 1}. ⬜ ${h.title}\n`;
-    });
-    text += '\n';
-  }
-
-  if (done.length) {
-    text += '✅ Уже выполнены сегодня:\n';
-    done.forEach(h => {
-      text += `• ${h.title} 🔥 ${h.streak}\n`;
-    });
-  }
-
-  const keyboard = [];
-
-  undone.forEach(h => {
-    keyboard.push([
-      { text: '✅ Выполнено', callback_data: `done_${h.id}` },
-      { text: '🗑 Удалить', callback_data: `delete_${h.id}` }
-    ]);
+  all.forEach(h => {
+    text += `${h.last_done ? '✅' : '⬜'} ${h.title}\n`;
   });
 
-  done.forEach(h => {
-    keyboard.push([
-      { text: '🗑 Удалить', callback_data: `delete_${h.id}` }
-    ]);
-  });
+  const keyboard = all.map(h => ([
+    { text: '✓', callback_data: `done_${h.id}` },
+    { text: '🗑', callback_data: `delete_${h.id}` }
+  ]));
+
+  keyboard.push([
+    { text: '➕ Новая привычка', callback_data: 'add_habit' },
+    { text: '📊 Статистика', callback_data: 'stats' }
+  ]);
 
   return { text, keyboard };
 }
+
 
 module.exports = (bot) => {
 
@@ -79,50 +65,16 @@ module.exports = (bot) => {
     }
 
     if (text === '/menu') {
-      sendMenu(bot, chatId);
-      return;
-    }
-
-    // ====== MENU BUTTONS ======
-    if (text === '➕ Добавить привычку') {
-      setUserState(chatId, 'adding_habit');
-      sendMenu(bot, chatId, 'Введите название привычки:');
-      return;
-    }
-
-    if (text === '📋 Мои привычки') {
       const habits = getHabitsForToday(chatId);
       const { text: messageText, keyboard } = renderHabitsMessage(habits);
-
+      
       bot.sendMessage(chatId, messageText, {
         reply_markup: { inline_keyboard: keyboard }
       });
-
+      
       return;
     }
 
-    if (text === '📊 Статистика') {
-      const stats = getStats(chatId);
-      const topHabits = getTopHabits(chatId);
-
-      let message = `📊 Статистика\n\n`;
-      message += `📌 Всего привычек: ${stats.totalHabits}\n`;
-      message += `✅ Выполнено сегодня: ${stats.completedToday}\n`;
-      message += `🔥 Лучшая серия: ${stats.bestStreak}\n`;
-      message += `🏁 Всего выполнений: ${stats.totalCompleted}\n`;
-
-      if (topHabits.length) {
-        message += `🏆 Топ привычек:\n`;
-        topHabits.forEach((h, i) => {
-          message += `${i + 1}. ${h.title} - 🔥 ${h.streak}\n`;
-        });
-      } else {
-        message += `Пока нет данных для рейтинга`;
-      }
-
-      bot.sendMessage(chatId, message);
-      return;
-    }
 
     // ====== STATES ======
     const state = getUserState(chatId);
@@ -135,7 +87,13 @@ module.exports = (bot) => {
 
       addHabit(chatId, text);
       clearUserState(chatId);
-      sendMenu(bot, chatId, 'Привычка добавлена ✅');
+      
+      const habits = getHabitsForToday(chatId);
+      const { text: messageText, keyboard } = renderHabitsMessage(habits);
+      
+      bot.sendMessage(chatId, 'Привычка добавлена ✅');
+      bot.sendMessage(chatId, messageText, { reply_markup: { inline_keyboard: keyboard }});
+
       return;
     }
   });
@@ -145,6 +103,32 @@ module.exports = (bot) => {
     const chatId = query.message.chat.id;
     const messageId = query.message.message_id;
     const data = query.data;
+
+    if (data === 'add_habit') {
+  setUserState(chatId, 'adding_habit');
+  bot.sendMessage(chatId, 'Введите название привычки:');
+  bot.answerCallbackQuery(query.id);
+  return;
+}
+
+if (data === 'stats') {
+  const stats = getStats(chatId);
+  const topHabits = getTopHabits(chatId);
+
+  let message = `📊 Статистика\n\n`;
+  message += `Всего привычек: ${stats.totalHabits}\n`;
+  message += `Выполнено сегодня: ${stats.completedToday}\n`;
+  message += `Лучшая серия: ${stats.bestStreak}\n`;
+  message += `Всего выполнений: ${stats.totalCompleted}\n\n`;
+
+  topHabits.forEach((h, i) => {
+    message += `${i + 1}. ${h.title} — 🔥 ${h.streak}\n`;
+  });
+
+  bot.sendMessage(chatId, message);
+  bot.answerCallbackQuery(query.id);
+  return;
+}
 
     if (data.startsWith('done_')) {
       const habitId = Number(data.replace('done_', ''));

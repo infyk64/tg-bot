@@ -26,6 +26,14 @@ function App() {
       
       if (initData?.user) {
         setUser(initData.user);
+      } else {
+        // ВРЕМЕННО: для тестирования UI
+        console.warn('initDataUnsafe пустой, используем тестового пользователя');
+        setUser({ 
+          id: 123456789, 
+          first_name: 'Test User',
+          username: 'testuser' 
+        });
       }
     } else {
       console.log('Telegram WebApp не найден');
