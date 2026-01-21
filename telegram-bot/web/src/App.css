@@ -176,6 +176,11 @@ body {
   color: #666;
 }
 
+.btn-delete {
+  background: #ff6b6b;
+  color: #fff;
+}
+
 /* Кнопка добавления */
 .add-habit-btn {
   position: fixed;
